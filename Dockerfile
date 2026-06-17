@@ -19,7 +19,7 @@ ARG MODEL=small.en
 RUN bash ./models/download-ggml-model.sh ${MODEL}
 
 
-FROM debian:bookworm-slim
+FROM python:3.12-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 ca-certificates ffmpeg curl \
@@ -27,19 +27,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
 ARG MODEL=small.en
 COPY --from=builder /build/build/bin/whisper-server /app/whisper-server
 COPY --from=builder /build/models/ggml-${MODEL}.bin /app/models/ggml-${MODEL}.bin
 
+COPY app.py /app/app.py
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 ENV MODEL=small.en
 ENV PORT=8080
+ENV INTERNAL_PORT=8081
 ENV THREADS=4
+# Set API_KEY in Railway to enable bearer-token auth. Unset = open access.
 
 EXPOSE 8080
 
-# Railway sets $PORT at runtime. THREADS should match the plan's vCPU count.
-CMD ["/bin/sh", "-c", "exec /app/whisper-server \
-    --host 0.0.0.0 \
-    --port ${PORT} \
-    --threads ${THREADS} \
-    --model /app/models/ggml-${MODEL}.bin"]
+CMD ["/app/entrypoint.sh"]

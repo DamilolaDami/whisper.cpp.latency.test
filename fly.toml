@@ -1,0 +1,38 @@
+# Run `fly launch --no-deploy` first to claim a name + region, then edit this
+# file as needed and `fly deploy`.
+
+app = "whisper-cpp-test"
+primary_region = "iad"  # change to nearest: iad/ord/sjc/lhr/fra/syd/...
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  MODEL = "small.en"
+  THREADS = "4"
+  INTERNAL_PORT = "8081"
+  # API_KEY is set as a secret: `fly secrets set API_KEY=...`
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"      # scale to zero between tests (saves money)
+  auto_start_machines = true
+  min_machines_running = 0         # 0 = cold start on first request; set 1 to keep warm
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 4
+    hard_limit = 8
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "60s"
+  method = "GET"
+  path = "/health"
+
+[[vm]]
+  size = "shared-cpu-4x"
+  memory = "2gb"

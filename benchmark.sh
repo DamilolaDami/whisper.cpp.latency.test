@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
+# Sequential latency benchmark against the proxy.
+#
 # Usage:
 #   ./benchmark.sh <url> <audio_file> [iterations]
-# Example:
-#   ./benchmark.sh https://your-app.up.railway.app samples/jfk.wav 10
+#   API_KEY=... ./benchmark.sh <url> <audio_file> [iterations]
 
 set -euo pipefail
 
@@ -12,18 +13,22 @@ ITERS="${3:-5}"
 
 if [[ ! -f "$AUDIO" ]]; then
     echo "Audio file not found: $AUDIO" >&2
-    echo "Hint: grab a sample with:" >&2
-    echo "  curl -L -o samples/jfk.wav https://github.com/ggerganov/whisper.cpp/raw/master/samples/jfk.wav" >&2
+    echo "Hint:" >&2
+    echo "  mkdir -p samples && curl -L -o samples/jfk.wav https://github.com/ggerganov/whisper.cpp/raw/master/samples/jfk.wav" >&2
     exit 1
 fi
 
-# Audio duration via ffprobe (if available) for real-time-factor calc.
+AUTH_HEADER=()
+if [[ -n "${API_KEY:-}" ]]; then
+    AUTH_HEADER=(-H "Authorization: Bearer ${API_KEY}")
+fi
+
 DURATION=""
 if command -v ffprobe >/dev/null 2>&1; then
     DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$AUDIO" 2>/dev/null || true)
 fi
 
-echo "Endpoint:  $URL/inference"
+echo "Endpoint:  $URL/transcribe"
 echo "Audio:     $AUDIO ${DURATION:+(${DURATION}s)}"
 echo "Iters:     $ITERS"
 echo
@@ -31,8 +36,8 @@ echo
 total=0
 for i in $(seq 1 "$ITERS"); do
     t=$(curl -s -o /dev/null -w '%{time_total}' \
-        -X POST "$URL/inference" \
-        -H 'Content-Type: multipart/form-data' \
+        -X POST "$URL/transcribe" \
+        "${AUTH_HEADER[@]}" \
         -F "file=@${AUDIO}" \
         -F 'response_format=json')
     printf "  run %02d: %ss\n" "$i" "$t"
